@@ -86,3 +86,21 @@ python -m p3.compare_models --output build/p3-model-comparison.json --timing-out
 ```
 
 The new CI checks nonzero actor **and** critic gradients, fixed-seed repeatability and full comparison JSON byte-for-byte stability. It **does not require the neural network to outperform** the linear baseline. Runtime is recorded separately because timing is not byte-reproducible and includes training, validation and evaluation, but excludes dependency installation. It is single-machine sequential timing, **not** a hardware-standardized benchmark. Neither implementation reproduces the original vectorized n-step PyTorch A2C notebook; that remains an open research task.
+
+### Verified comparison result (2026-11-09)
+
+The [CPU comparison workflow](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42637469330) succeeded after separately fixing (1) PyTorch test isolation from the dependency-light NumPy job and (2) float64 normalization when passing softmax probabilities to NumPy's action sampler. **Both failures remain visible in the workflow history.**
+
+| Seed | NumPy linear: mean reward | PyTorch neural: mean reward | Neural minus linear |
+|---|---:|---:|---:|
+| 2026 | 382.109 | 324.297 | -57.812 |
+| 2027 | 410.953 | 280.266 | -130.687 |
+| 2028 | 484.156 | 436.828 | -47.328 |
+| Mean over three seed-level means | **425.739** | **347.130** | -78.609 |
+| Sample standard deviation | 52.606 | 80.740 | |
+
+- **Training/evaluation:** same CartPole-v1, seeds 2026/2027/2028, 480 training episodes per seed, 12 validation episodes per checkpoint, 64 held-out evaluation episodes per seed.
+- **Model size:** 15 trainable values in the NumPy linear actor/critic versus 483 neural network parameters (two independent one-hidden-layer networks with 32 Tanh units).
+- **Measured single-host sequential runtimes:** NumPy 3.667/3.875/6.063 seconds; PyTorch 11.648/9.437/15.554 seconds. The per-seed averages are approximately 4.54 s vs 12.21 s. These observations include training, validation and evaluation, exclude dependency install, and **are not hardware-normalized**.
+- **Reproducibility:** three neural gradient/seed tests passed; deterministic comparison JSON matched byte-for-byte on two complete executions. Wall-clock numbers deliberately live in a separate non-deterministic JSON file.
+- **Important limitation:** training algorithm details, architecture, optimizer and arithmetic precision differ. The results **do not establish causality**, general superiority of linear networks, or parity with the original vectorized n-step A2C Notebook. Only the two modern companion implementations were compared, and performance is based on three seeds.
