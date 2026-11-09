@@ -53,3 +53,15 @@ ACER [@Kaixhin](https://github.com/Kaixhin)
 - Deep RL Bootcamp [link](https://sites.google.com/view/deep-rl-bootcamp/lectures)
 - David Silver's course [link](http://www0.cs.ucl.ac.uk/staff/d.silver/web/Teaching.html)
 - Practical RL [link](https://github.com/yandexdataschool/Practical_RL)
+
+## P3 · Reproducible CPU actor–critic companion (2026-11-09)
+
+The archived actor-critic notebook uses historical `CartPole-v0`/Gym semantics and a PyTorch vector environment. Without changing the original notebook or misrepresenting full A2C reproduction, [`p3/cartpole_actor_critic.py`](p3/cartpole_actor_critic.py) adds a **lightweight, genuine training** companion using modern `CartPole-v1` (Gymnasium 1.1.1) and a NumPy **linear** softmax actor/value critic. It computes discounted returns, advantage gradients, performs actual policy/value parameter updates, and compares greedy evaluation before/after training with a seeded random-action baseline.
+
+```bash
+python -m pip install 'gymnasium==1.1.1' 'numpy==1.26.4'
+python -m unittest discover -s tests -p 'test_p3_*.py' -v
+python -m p3.cartpole_actor_critic --seed 2026 --train-episodes 480 --eval-episodes 64 --output build/p3-cartpole-actor-critic.json
+```
+
+CI executes the training **twice**, compares JSON outputs byte-for-byte, checks policy weights changed and that the **held-out** trained policy exceeds the random baseline. A separate 12-episode validation set chooses checkpoints; the 64-episode held-out test seeds are not used for that choice. JSON records versions, seeds, budgets, mean and standard deviation, weight change, and validation trace. This is **linear actor–critic**, not a deep PyTorch A2C/GAE/PPO model, and one fixed seed is not a multi-seed confidence interval. The original notebooks and citations remain intact.

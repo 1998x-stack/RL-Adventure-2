@@ -1,0 +1,39 @@
+name: P3 CPU actor-critic learning benchmark
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  policy-learning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install small pinned CPU dependencies (no Torch or GPU)
+        run: python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+      - name: Unit tests on real CartPole and parameter updates
+        run: python -m unittest discover -s tests -p "test_p3_*.py" -v
+      - name: Train, evaluate against random and check fixed-seed JSON reproducibility
+        run: |
+          python -m p3.cartpole_actor_critic --seed 2026 --train-episodes 480 --eval-episodes 64 --output build/p3-cartpole-actor-critic.json
+          python -m p3.cartpole_actor_critic --seed 2026 --train-episodes 480 --eval-episodes 64 --output build/p3-cartpole-actor-critic-repeat.json
+          cmp build/p3-cartpole-actor-critic.json build/p3-cartpole-actor-critic-repeat.json
+          python - <<'PY'
+          import json
+          d=json.load(open("build/p3-cartpole-actor-critic.json"))
+          final=d["evaluation"]["trained_greedy"]["mean_reward"]
+          random=d["evaluation"]["random"]["mean_reward"]
+          initial=d["evaluation"]["initial_greedy"]["mean_reward"]
+          assert d["policy_weight_l2_change"]>0.01, "No real policy update"
+          assert final > random+15, (initial,final,random)
+          print(f"P3_RL_RESULT initial={initial} trained={final} random={random} episodes={d['evaluation_episodes']} weight_change={d['policy_weight_l2_change']}")
+          PY
+      - name: Upload real learning and evaluation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-cpu-actor-critic-evaluation
+          path: build/p3-cartpole-actor-critic.json
