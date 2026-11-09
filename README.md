@@ -108,15 +108,34 @@ The [CPU comparison workflow](https://github.com/1998x-stack/RL-Adventure-2/acti
 
 ### P3: notebook-style vectorized n-step A2C (modern Gymnasium)
 
-The archived \`1.actor-critic.ipynb\` uses **16 environments**, **5-step bootstrapped returns**, separate **256-unit ReLU** policy/value networks, advantage-weighted actor loss, value loss and entropy regularization. [\`p3/vector_nstep_a2c.py\`](p3/vector_nstep_a2c.py) now preserves that algorithmic structure on modern \`CartPole-v1\` and PyTorch CPU. The implementation uses \`SyncVectorEnv\` rather than the original subprocess helper, and \`AutoresetMode.SAME_STEP\` to ensure every training step is a real transition. It bootstraps from \`final_obs\` on Gymnasium time-limit truncations instead of accidentally using the reset observation.
+The archived `1.actor-critic.ipynb` uses **16 environments**, **5-step bootstrapped returns**, separate **256-unit ReLU** policy/value networks, advantage-weighted actor loss, value loss and entropy regularization. [`p3/vector_nstep_a2c.py`](p3/vector_nstep_a2c.py) now preserves that algorithmic structure on modern `CartPole-v1` and PyTorch CPU. The implementation uses `SyncVectorEnv` rather than the original subprocess helper, and `AutoresetMode.SAME_STEP` to ensure every training step is a real transition. It bootstraps from `final_obs` on Gymnasium time-limit truncations instead of accidentally using the reset observation.
 
 The workflow runs three fixed seeds (2026/2027/2028), **16 × 5 × 4,000 = 320,000 environment transitions per seed (20,000 vector steps as in the original notebook)**, validates checkpoints on a separate 12-episode seed set and evaluates on 64 held-out episodes per seed. It tests actual policy/value updates, SAME_STEP semantics and n-step masks; it byte-compares two result JSON exports. Wall times are kept in a separate file because they cannot be exactly reproduced.
 
-\`\`\`bash
+```bash
 python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
 python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
 python -m unittest discover -s tests -p "vector_a2c_contract_test.py" -v
 python -m p3.vector_nstep_a2c --updates 4000 --eval-episodes 64
-\`\`\`
+```
 
-**Scope:** this is an audited, modern **notebook-style** vectorized A2C, **not** a verbatim rerun of the 2018 \`CartPole-v0\`/16-worker \`SubprocVecEnv\` experiment. It uses synchronous stepping, 3e-4 Adam, separate Gymnasium time-limit bootstrapping and clipped gradient norms. Its training budget is *environment transitions*, whereas earlier linear/neural comparisons budgeted *480 completed episodes*, so those published reward numbers must not be interpreted as equal-sample head-to-head rankings. More seeds, a matched environment-frame budget, and an actual subprocess vector test would be necessary for rigorous algorithm comparison.
+**Scope:** this is an audited, modern **notebook-style** vectorized A2C, **not** a verbatim rerun of the 2018 `CartPole-v0`/16-worker `SubprocVecEnv` experiment. It uses synchronous stepping, 3e-4 Adam, separate Gymnasium time-limit bootstrapping and clipped gradient norms. Its training budget is *environment transitions*, whereas earlier linear/neural comparisons budgeted *480 completed episodes*, so those published reward numbers must not be interpreted as equal-sample head-to-head rankings. More seeds, a matched environment-frame budget, and an actual subprocess vector test would be necessary for rigorous algorithm comparison.
+
+
+#### Verified full-horizon results (2026-11-09)
+
+[The full-horizon CPU workflow](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42640528466) completed successfully, with **4 contract tests** and two byte-for-byte identical complete-result JSON runs. Three precommitted seeds used **16 sub-environments, 5-step returns and 4,000 updates = 320,000 real environment steps per seed**.
+
+| Training seed | Greedy policy mean reward on 64 held-out CartPole-v1 episodes |
+|---|---:|
+| 2026 | 481.891 |
+| 2027 | 476.984 |
+| 2028 | 466.641 |
+| **Across-seed mean** | **475.172** |
+| **Across-seed sample SD** | **7.785** |
+
+Full-run CPU elapsed time per seed on one GitHub runner (training + validation + evaluation; excluding installation) was **37.756 / 36.026 / 31.123 seconds**, an average of approximately **34.97 seconds**. The second repeated run yielded the **same exact result JSON**, with slightly different timings that were recorded separately.
+
+The earlier [short-budget smoke](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42640025148) used only **25,600 interactions per seed** and recorded an across-seed mean **41.287**. This was a successful code/contract smoke test, **not sufficient training**. The longer experiment also uses a less frequent validation schedule, so this is **not a one-variable study isolating training budget**.
+
+**Important:** this benchmark reproduces the Notebook's **n-step learning structure and vector batch size**, not its original 2018 subprocess implementation or its Python/Gym dependency stack. Training budgets differ from the 480-completed-episode NumPy and smaller PyTorch comparisons, so their reward means cannot be fairly ranked against this result without aligning environment transitions and other protocol details.
