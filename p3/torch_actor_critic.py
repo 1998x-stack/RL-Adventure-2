@@ -45,7 +45,11 @@ class TorchActorCritic:
         with torch.no_grad():
             state_tensor = torch.as_tensor(state, dtype=torch.float32)
             logits = self.actor(state_tensor)
-            return torch.softmax(logits, -1).cpu().numpy().astype(np.float64)
+            probs = torch.softmax(logits, -1).cpu().numpy().astype(np.float64)
+            # np.random.Generator.choice validates float64 probabilities more
+            # strictly than float32 softmax accumulation, so normalize again.
+            probs = np.clip(probs, 0.0, 1.0)
+            return probs / probs.sum()
 
     def update(self, episodes):
         if not episodes or not any(episodes):
