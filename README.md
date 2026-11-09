@@ -81,7 +81,7 @@ python -m p3.benchmark --output build/p3-multiseed.json
 ```bash
 python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
 python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
-python -m unittest discover -s tests -p "test_p3_neural.py" -v
+python -m unittest discover -s tests -p "neural_contract_test.py" -v
 python -m p3.compare_models --output build/p3-model-comparison.json --timing-output build/p3-model-timing.json
 ```
 

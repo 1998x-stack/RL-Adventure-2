@@ -3,12 +3,12 @@ on:
   push:
     paths:
       - "p3/**"
-      - "tests/test_p3_*.py"
+      - "tests/neural_contract_test.py"
       - ".github/workflows/p3-neural-comparison.yml"
   pull_request:
     paths:
       - "p3/**"
-      - "tests/test_p3_*.py"
+      - "tests/neural_contract_test.py"
       - ".github/workflows/p3-neural-comparison.yml"
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
           python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
           python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
       - name: Prove real gradients and seeded test contracts
-        run: python -m unittest discover -s tests -p "test_p3_neural.py" -v
+        run: python -m unittest discover -s tests -p "neural_contract_test.py" -v
       - name: Same-environment three-seed comparison with runtime diagnostics
         run: |
           python -m p3.compare_models --output build/p3-model-comparison.json --timing-output build/p3-model-timing.json
