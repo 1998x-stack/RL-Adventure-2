@@ -185,7 +185,7 @@ def evaluate(model, seed, episodes=64, *, random_actions=False):
         env.close()
 
 
-def run(seed=2026, updates=320, evaluation_episodes=64,
+def run(seed=2026, updates=4000, evaluation_episodes=64,
         *, num_envs=NUM_ENVS, n_steps=NUM_STEPS, hidden_size=256):
     if seed < 0 or updates < 1 or evaluation_episodes < 1:
         raise ValueError("Seed, updates and evaluation budget must be positive")
@@ -218,7 +218,7 @@ def run(seed=2026, updates=320, evaluation_episodes=64,
                 model, optimizer, envs, state, steps=n_steps)
             total_episodes += result["completed_episodes"]
             truncations += result["truncated_episodes"]
-            if u % 20 == 0 or u == updates:
+            if u % 100 == 0 or u == updates:
                 validation = evaluate(model, seed + 100_000, 12)
                 trace.append({"update": u,
                               "validation_mean_reward": validation["mean_reward"]})
@@ -265,7 +265,7 @@ def run(seed=2026, updates=320, evaluation_episodes=64,
     }
 
 
-def multi_seed(seeds=DEFAULT_SEEDS, updates=320, evaluation_episodes=64,
+def multi_seed(seeds=DEFAULT_SEEDS, updates=4000, evaluation_episodes=64,
                *, num_envs=NUM_ENVS, n_steps=NUM_STEPS):
     seeds = tuple(seeds)
     if len(seeds) < 2 or len(set(seeds)) != len(seeds):
@@ -298,7 +298,7 @@ def multi_seed(seeds=DEFAULT_SEEDS, updates=320, evaluation_episodes=64,
 
 def main():
     cli = argparse.ArgumentParser()
-    cli.add_argument("--updates", type=int, default=320)
+    cli.add_argument("--updates", type=int, default=4000)
     cli.add_argument("--eval-episodes", type=int, default=64)
     cli.add_argument("--output", type=Path,
                      default=Path("build/p3-vector-a2c-results.json"))

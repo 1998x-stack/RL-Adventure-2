@@ -31,10 +31,10 @@ jobs:
           python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
       - name: Test n-step targets, autoresets, time limit and actual gradients
         run: python -m unittest discover -s tests -p "vector_a2c_contract_test.py" -v
-      - name: Train 16-env 5-step A2C for three predefined seeds
+      - name: Reproduce notebook 20k vector steps (320k transitions) on three seeds
         run: |
-          python -m p3.vector_nstep_a2c --updates 320 --eval-episodes 64 --output build/p3-vector-a2c-results.json --timing-output build/p3-vector-a2c-cost.json
-          python -m p3.vector_nstep_a2c --updates 320 --eval-episodes 64 --output build/p3-vector-a2c-repeat.json --timing-output build/p3-vector-a2c-repeat-cost.json
+          python -m p3.vector_nstep_a2c --updates 4000 --eval-episodes 64 --output build/p3-vector-a2c-results.json --timing-output build/p3-vector-a2c-cost.json
+          python -m p3.vector_nstep_a2c --updates 4000 --eval-episodes 64 --output build/p3-vector-a2c-repeat.json --timing-output build/p3-vector-a2c-repeat-cost.json
           cmp build/p3-vector-a2c-results.json build/p3-vector-a2c-repeat.json
           python - <<'PY'
           import json
@@ -42,7 +42,7 @@ jobs:
           data = json.loads(Path("build/p3-vector-a2c-results.json").read_text())
           assert data["seeds"] == [2026, 2027, 2028]
           assert all(row["num_envs"] == 16 and row["n_steps"] == 5 for row in data["runs"])
-          assert all(row["training_environment_steps"] == 25600 for row in data["runs"])
+          assert all(row["training_environment_steps"] == 320000 for row in data["runs"])
           assert all(row["actor_weight_l2_change"] > 0 and row["critic_weight_l2_change"] > 0 for row in data["runs"])
           assert all(row["evaluation"]["trained_greedy"]["episodes"] == 64 for row in data["runs"])
           print("P3_VECTOR_A2C_CONTRACT_OK; scores are observations, not a guaranteed win")
