@@ -32,8 +32,32 @@ jobs:
           assert final > random+15, (initial,final,random)
           print(f"P3_RL_RESULT initial={initial} trained={final} random={random} episodes={d['evaluation_episodes']} weight_change={d['policy_weight_l2_change']}")
           PY
+      - name: Run three independent precommitted seeds and compare exact JSON
+        run: |
+          python -m p3.benchmark --output build/p3-multiseed.json
+          python -m p3.benchmark --output build/p3-multiseed-repeat.json
+          cmp build/p3-multiseed.json build/p3-multiseed-repeat.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("build/p3-multiseed.json").read_text())
+          assert d["seeds"] == [2026,2027,2028]
+          assert all(r["policy_weight_l2_change"] > 0.01 for r in d["runs"])
+          mean=d["summary"]["trained_minus_random"]["mean_gap"]
+          assert mean > 30, f"multi-seed holdout advantage not established: {mean}"
+          print("P3_RL_THREE_SEEDS", json.dumps({
+            "seeds":d["seeds"],
+            "trained":d["summary"]["trained_greedy"]["individual_seed_means"],
+            "random":d["summary"]["random"]["individual_seed_means"],
+            "trained_mean":d["summary"]["trained_greedy"]["mean_of_seed_means"],
+            "trained_sample_sd":d["summary"]["trained_greedy"]["sample_sd_of_seed_means"],
+            "mean_gap":mean,
+          },sort_keys=True))
+          PY
       - name: Upload real learning and evaluation evidence
         uses: actions/upload-artifact@v4
         with:
           name: p3-cpu-actor-critic-evaluation
-          path: build/p3-cartpole-actor-critic.json
+          path: |
+            build/p3-cartpole-actor-critic.json
+            build/p3-multiseed.json

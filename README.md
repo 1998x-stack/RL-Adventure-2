@@ -65,3 +65,11 @@ python -m p3.cartpole_actor_critic --seed 2026 --train-episodes 480 --eval-episo
 ```
 
 CI executes the training **twice**, compares JSON outputs byte-for-byte, checks policy weights changed and that the **held-out** trained policy exceeds the random baseline. A separate 12-episode validation set chooses checkpoints; the 64-episode held-out test seeds are not used for that choice. JSON records versions, seeds, budgets, mean and standard deviation, weight change, and validation trace. This is **linear actor–critic**, not a deep PyTorch A2C/GAE/PPO model, and one fixed seed is not a multi-seed confidence interval. The original notebooks and citations remain intact.
+
+### P3 three-seed replication
+
+The CI also precommits **seeds 2026, 2027, 2028**, each running 480 training episodes and 64 held-out evaluation episodes. [`p3/benchmark.py`](p3/benchmark.py) preserves **each** run and calculates descriptive mean and sample standard deviation across seed-level means, with the same random-action comparison for every seed. The multi-seed JSON is produced twice and compared byte-for-byte. This reduces dependence on one lucky run, but **three seeds do not establish statistical significance or reproduce the original deep A2C notebook**.
+
+```bash
+python -m p3.benchmark --output build/p3-multiseed.json
+```
