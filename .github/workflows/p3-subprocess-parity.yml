@@ -1,0 +1,57 @@
+name: P3 real subprocess A2C backend parity
+on:
+  push:
+    paths:
+      - "p3/vector_nstep_a2c.py"
+      - "p3/compare_vector_backends.py"
+      - "tests/subprocess_a2c_contract_test.py"
+      - ".github/workflows/p3-subprocess-parity.yml"
+  pull_request:
+    paths:
+      - "p3/vector_nstep_a2c.py"
+      - "p3/compare_vector_backends.py"
+      - "tests/subprocess_a2c_contract_test.py"
+      - ".github/workflows/p3-subprocess-parity.yml"
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned modern CPU environment
+        run: |
+          python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+          python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+      - name: Verify worker identity, time-limit semantics and short training
+        run: python -m unittest discover -s tests -p "subprocess_a2c_contract_test.py" -v
+      - name: Compare same 320k-frame A2C algorithm in both backends
+        run: |
+          python -m p3.compare_vector_backends --seed 2026 --updates 4000 --eval-episodes 64 --output build/p3-backend-parity.json --cost build/p3-backend-timing.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          doc=json.loads(Path("build/p3-backend-parity.json").read_text())
+          assert doc["seed"] == 2026
+          assert doc["transitions_per_backend"] == 320000
+          assert doc["exact_training_and_evaluation_parity"]
+          assert doc["results"]["sync"]["evaluation"] == doc["results"]["async"]["evaluation"]
+          print("P3_ASYNC_EQUAL_FRAME_BUDGET_PASS", doc["transitions_per_backend"])
+          PY
+      - name: Archive semantic parity and separately measured times
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-async-subprocess-parity
+          path: |
+            build/p3-backend-parity.json
+            build/p3-backend-timing.json
+          if-no-files-found: ignore
