@@ -30,7 +30,8 @@ class ExactFrameBudgetTests(unittest.TestCase):
                 b = run_episodic(21, 160, 4, neural=neural, checkpoint_every=80)
                 self.assertEqual(a, b)
                 self.assertEqual(a["training_environment_steps"], 160)
-                self.assertGreater(a["actor_weight_l2_change"], 0)
+                self.assertGreater(a["training_actor_weight_l2_change"], 0)
+                self.assertGreater(a["training_critic_weight_l2_change"], 0)
                 self.assertEqual(a["evaluation"]["trained_greedy"]["episodes"], 4)
 
     def test_short_equal_frames_all_three_algorithms(self):
