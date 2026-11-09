@@ -2,7 +2,7 @@
 
 Faithful core: separate 256-ReLU actor/critic, 16 environments, 5-step
 bootstrapped targets, entropy bonus and shared Adam optimizer.
-Deliberate modernizations: SyncVectorEnv (not SubprocVecEnv), SAME_STEP autoreset,
+Deliberate modernizations: SyncVectorEnv or real multiprocessing AsyncVectorEnv, SAME_STEP autoreset,
 correct TimeLimit final_observation bootstrap, explicit seeding and a held-out
 checkpoint protocol. Not a byte-level reproduction of the 2018 notebook.
 """
@@ -63,21 +63,33 @@ def n_step_returns(rewards, continues, bootstrap, gamma=0.99):
     return torch.stack(list(reversed(backwards)))
 
 
-def make_envs(seed, count=NUM_ENVS, max_episode_steps=None):
+def make_envs(seed, count=NUM_ENVS, max_episode_steps=None, *,
+              backend="sync"):
     import gymnasium as gym
-    from gymnasium.vector import SyncVectorEnv, AutoresetMode
+    from gymnasium.vector import SyncVectorEnv, AsyncVectorEnv, AutoresetMode
 
     if count < 1:
         raise ValueError("count must be positive")
+    if backend not in ("sync", "async"):
+        raise ValueError("backend must be sync or async")
     kwargs = {} if max_episode_steps is None else {
         "max_episode_steps": max_episode_steps}
-    envs = SyncVectorEnv(
-        [lambda options=kwargs: gym.make("CartPole-v1", **options)
-         for _ in range(count)],
-        autoreset_mode=AutoresetMode.SAME_STEP,
-    )
-    state, _ = envs.reset(seed=[seed + i for i in range(count)])
-    return envs, state
+    factories = [lambda options=kwargs: gym.make("CartPole-v1", **options)
+                 for _ in range(count)]
+    if backend == "sync":
+        envs = SyncVectorEnv(factories, autoreset_mode=AutoresetMode.SAME_STEP)
+    else:
+        # Gymnasium's real worker processes replace historical old-Gym
+        # SubprocVecEnv; no fake or in-process concurrency.
+        envs = AsyncVectorEnv(
+            factories, autoreset_mode=AutoresetMode.SAME_STEP,
+            shared_memory=False, context="spawn")
+    try:
+        state, _ = envs.reset(seed=[seed + i for i in range(count)])
+        return envs, state
+    except BaseException:
+        envs.close()
+        raise
 
 
 def learn_rollout(model, optimizer, envs, state, *, steps=NUM_STEPS, gamma=0.99):
@@ -186,7 +198,8 @@ def evaluate(model, seed, episodes=64, *, random_actions=False):
 
 
 def run(seed=2026, updates=4000, evaluation_episodes=64,
-        *, num_envs=NUM_ENVS, n_steps=NUM_STEPS, hidden_size=256):
+        *, num_envs=NUM_ENVS, n_steps=NUM_STEPS, hidden_size=256,
+        backend="sync"):
     if seed < 0 or updates < 1 or evaluation_episodes < 1:
         raise ValueError("Seed, updates and evaluation budget must be positive")
     if num_envs < 1 or n_steps < 1:
@@ -205,7 +218,7 @@ def run(seed=2026, updates=4000, evaluation_episodes=64,
     random_baseline = evaluate(model, seed + 200_000,
                                evaluation_episodes, random_actions=True)
     initial = evaluate(model, seed + 200_000, evaluation_episodes)
-    envs, state = make_envs(seed, num_envs)
+    envs, state = make_envs(seed, num_envs, backend=backend)
     best = copy.deepcopy(model.state_dict())
     best_validation = float("-inf")
     best_update = 0
@@ -237,8 +250,9 @@ def run(seed=2026, updates=4000, evaluation_episodes=64,
     actor_delta = float(torch.linalg.vector_norm(actor_now - initial_actor))
     critic_delta = float(torch.linalg.vector_norm(critic_now - initial_critic))
     return {
-        "algorithm": "synchronous vectorized 5-step bootstrapped advantage actor-critic",
-        "scope": "notebook-style architecture and n-step returns; SyncVectorEnv SAME_STEP, not original SubprocVecEnv",
+        "algorithm": "vectorized 5-step bootstrapped advantage actor-critic",
+        "scope": "notebook-style n-step structure, modern Gymnasium SAME_STEP; not archived legacy SubprocVecEnv",
+        "vector_backend": backend,
         "seed": seed,
         "gymnasium": gym.__version__,
         "torch": torch.__version__,
@@ -266,7 +280,7 @@ def run(seed=2026, updates=4000, evaluation_episodes=64,
 
 
 def multi_seed(seeds=DEFAULT_SEEDS, updates=4000, evaluation_episodes=64,
-               *, num_envs=NUM_ENVS, n_steps=NUM_STEPS):
+               *, num_envs=NUM_ENVS, n_steps=NUM_STEPS, backend="sync"):
     seeds = tuple(seeds)
     if len(seeds) < 2 or len(set(seeds)) != len(seeds):
         raise ValueError("At least two distinct seeds are required")
@@ -275,7 +289,7 @@ def multi_seed(seeds=DEFAULT_SEEDS, updates=4000, evaluation_episodes=64,
     for seed in seeds:
         started = time.perf_counter()
         report = run(seed, updates, evaluation_episodes,
-                     num_envs=num_envs, n_steps=n_steps)
+                     num_envs=num_envs, n_steps=n_steps, backend=backend)
         timings.append({"seed": seed, "seconds": round(
             time.perf_counter() - started, 3)})
         reports.append(report)
@@ -300,13 +314,14 @@ def main():
     cli = argparse.ArgumentParser()
     cli.add_argument("--updates", type=int, default=4000)
     cli.add_argument("--eval-episodes", type=int, default=64)
+    cli.add_argument("--backend", choices=("sync", "async"), default="sync")
     cli.add_argument("--output", type=Path,
                      default=Path("build/p3-vector-a2c-results.json"))
     cli.add_argument("--timing-output", type=Path,
                      default=Path("build/p3-vector-a2c-cost.json"))
     args = cli.parse_args()
     report, cost = multi_seed(updates=args.updates,
-                              evaluation_episodes=args.eval_episodes)
+                              evaluation_episodes=args.eval_episodes, backend=args.backend)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.timing_output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n",
