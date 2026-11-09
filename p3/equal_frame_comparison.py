@@ -129,6 +129,15 @@ def run_episodic(seed, frames, evaluation_episodes=64, *, neural=False,
             if capped.used <= used_before:
                 raise AssertionError("episode did not consume frames")
 
+        # Check actual training movement BEFORE validation-based checkpoint
+        # selection; the selected checkpoint can legitimately be initial.
+        if neural:
+            training_actor_delta = learner.actor_change()
+            training_critic_delta = learner.critic_change()
+        else:
+            training_actor_delta = float(np.linalg.norm(
+                learner.actor - learner.initial_actor))
+            training_critic_delta = float(np.linalg.norm(learner.critic))
         _restore(learner, best, neural)
         final = evaluate(env, learner, seed + 200_000, evaluation_episodes)
         if capped.used != frames:
@@ -153,6 +162,8 @@ def run_episodic(seed, frames, evaluation_episodes=64, *, neural=False,
             "budget_forced_truncations": capped.budget_cutoff_episodes,
             "optimizer_updates": updates,
             "model_parameters": parameters,
+            "training_actor_weight_l2_change": round(training_actor_delta, 6),
+            "training_critic_weight_l2_change": round(training_critic_delta, 6),
             "actor_weight_l2_change": round(actor_delta, 6),
             "critic_weight_l2_change": (
                 round(critic_delta, 6) if critic_delta is not None else None),
