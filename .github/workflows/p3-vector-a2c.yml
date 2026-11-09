@@ -1,0 +1,58 @@
+name: P3 notebook-style vectorized n-step A2C
+on:
+  push:
+    paths:
+      - "p3/vector_nstep_a2c.py"
+      - "tests/vector_a2c_contract_test.py"
+      - ".github/workflows/p3-vector-a2c.yml"
+  pull_request:
+    paths:
+      - "p3/vector_nstep_a2c.py"
+      - "tests/vector_a2c_contract_test.py"
+      - ".github/workflows/p3-vector-a2c.yml"
+permissions:
+  contents: read
+jobs:
+  notebook-nstep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned CartPole and PyTorch CPU dependencies
+        run: |
+          python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+          python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+      - name: Test n-step targets, autoresets, time limit and actual gradients
+        run: python -m unittest discover -s tests -p "vector_a2c_contract_test.py" -v
+      - name: Train 16-env 5-step A2C for three predefined seeds
+        run: |
+          python -m p3.vector_nstep_a2c --updates 320 --eval-episodes 64 --output build/p3-vector-a2c-results.json --timing-output build/p3-vector-a2c-cost.json
+          python -m p3.vector_nstep_a2c --updates 320 --eval-episodes 64 --output build/p3-vector-a2c-repeat.json --timing-output build/p3-vector-a2c-repeat-cost.json
+          cmp build/p3-vector-a2c-results.json build/p3-vector-a2c-repeat.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("build/p3-vector-a2c-results.json").read_text())
+          assert data["seeds"] == [2026, 2027, 2028]
+          assert all(row["num_envs"] == 16 and row["n_steps"] == 5 for row in data["runs"])
+          assert all(row["training_environment_steps"] == 25600 for row in data["runs"])
+          assert all(row["actor_weight_l2_change"] > 0 and row["critic_weight_l2_change"] > 0 for row in data["runs"])
+          assert all(row["evaluation"]["trained_greedy"]["episodes"] == 64 for row in data["runs"])
+          print("P3_VECTOR_A2C_CONTRACT_OK; scores are observations, not a guaranteed win")
+          PY
+      - name: Preserve reproducible results and separate timing record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-notebook-style-vector-a2c
+          path: |
+            build/p3-vector-a2c-results.json
+            build/p3-vector-a2c-cost.json
+          if-no-files-found: ignore

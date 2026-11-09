@@ -104,3 +104,19 @@ The [CPU comparison workflow](https://github.com/1998x-stack/RL-Adventure-2/acti
 - **Measured single-host sequential runtimes:** NumPy 3.667/3.875/6.063 seconds; PyTorch 11.648/9.437/15.554 seconds. The per-seed averages are approximately 4.54 s vs 12.21 s. These observations include training, validation and evaluation, exclude dependency install, and **are not hardware-normalized**.
 - **Reproducibility:** three neural gradient/seed tests passed; deterministic comparison JSON matched byte-for-byte on two complete executions. Wall-clock numbers deliberately live in a separate non-deterministic JSON file.
 - **Important limitation:** training algorithm details, architecture, optimizer and arithmetic precision differ. The results **do not establish causality**, general superiority of linear networks, or parity with the original vectorized n-step A2C Notebook. Only the two modern companion implementations were compared, and performance is based on three seeds.
+
+
+### P3: notebook-style vectorized n-step A2C (modern Gymnasium)
+
+The archived \`1.actor-critic.ipynb\` uses **16 environments**, **5-step bootstrapped returns**, separate **256-unit ReLU** policy/value networks, advantage-weighted actor loss, value loss and entropy regularization. [\`p3/vector_nstep_a2c.py\`](p3/vector_nstep_a2c.py) now preserves that algorithmic structure on modern \`CartPole-v1\` and PyTorch CPU. The implementation uses \`SyncVectorEnv\` rather than the original subprocess helper, and \`AutoresetMode.SAME_STEP\` to ensure every training step is a real transition. It bootstraps from \`final_obs\` on Gymnasium time-limit truncations instead of accidentally using the reset observation.
+
+The workflow runs three fixed seeds (2026/2027/2028), **16 × 5 × 320 = 25,600 environment transitions per seed**, validates checkpoints on a separate 12-episode seed set and evaluates on 64 held-out episodes per seed. It tests actual policy/value updates, SAME_STEP semantics and n-step masks; it byte-compares two result JSON exports. Wall times are kept in a separate file because they cannot be exactly reproduced.
+
+\`\`\`bash
+python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+python -m unittest discover -s tests -p "vector_a2c_contract_test.py" -v
+python -m p3.vector_nstep_a2c --updates 320 --eval-episodes 64
+\`\`\`
+
+**Scope:** this is an audited, modern **notebook-style** vectorized A2C, **not** a verbatim rerun of the 2018 \`CartPole-v0\`/16-worker \`SubprocVecEnv\` experiment. It uses synchronous stepping, 3e-4 Adam, separate Gymnasium time-limit bootstrapping and clipped gradient norms. Its training budget is *environment transitions*, whereas earlier linear/neural comparisons budgeted *480 completed episodes*, so those published reward numbers must not be interpreted as equal-sample head-to-head rankings. More seeds, a matched environment-frame budget, and an actual subprocess vector test would be necessary for rigorous algorithm comparison.
