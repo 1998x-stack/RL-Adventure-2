@@ -168,3 +168,27 @@ python -m p3.equal_frame_comparison --frames 320000 --eval-episodes 64
 ```
 
 The CI runs the entire three-seed experiment **twice**, compares deterministic JSON byte-for-byte, and archives elapsed CPU wall times in a separate, non-deterministic file. The score must be reported irrespective of which algorithm wins.
+
+
+### P3 verified **exactly matched** CartPole training-frame comparison
+
+[Successful 3-algorithm equal-frame workflow, two complete JSON-consistent repetitions](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42650112154) runs **NumPy linear MC Actor-Critic**, **small PyTorch neural MC Actor-Critic** and **16-env n-step PyTorch A2C** on the same Gymnasium 1.1.1 CartPole-v1 with **exactly 320,000 real training environment steps per model per seed** (seeds 2026, 2027, 2028), shared held-out reset seeds and 64 test episodes each. Unlike the earlier 480-completed-episode comparison, frame counts now match exactly.
+
+| Seed | NumPy linear mean test reward | PyTorch small neural | 16-env n-step A2C |
+|---|---:|---:|---:|
+| 2026 | 497.531 | 500.000 | 481.891 |
+| 2027 | 495.078 | 498.062 | 476.984 |
+| 2028 | 498.219 | 494.297 | 482.297 |
+| **3-seed mean** | **496.943** | **497.453** | **480.391** |
+| **Sample SD of seed means** | 1.651 | 2.900 | 2.957 |
+
+On one sequential GitHub CPU run, mean elapsed times per seed including validation/evaluation but excluding installation were approximately **27.748 s / 69.017 s / 51.927 s**, respectively. Timing is **not a hardware-normalized speed comparison**. The full experiment was repeated twice within the same workflow and produced **byte-identical deterministic result JSON**, with timing kept separate. The new [`p3/equal_frame_comparison.py`](p3/equal_frame_comparison.py) script enforces a precise final partial-episode cutoff for the two episodic Monte Carlo learners. It explicitly records an artificial truncation, and **does not bootstrap beyond the budget**. N-step A2C continues to bootstrap inside its rollout; their optimizers, network sizes and checkpoint timing still differ slightly.
+
+**Interpretation:** All three methods are near CartPole-v1's 500-point cap. The 0.510-point gap between the two episodic methods is not evidence of general superiority or statistical significance. Equal training frames remove a major confounder, but do not equalize algorithm, model capacity, gradient update frequency or compute.
+
+**Cross-protocol reproducibility qualification:** The previously independent [n-step workflow](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42640528466) reported seed 2028 mean **466.641**, versus **482.297** inside this two-pass joint comparison, despite matching nominal training settings. A separate [order-isolation audit](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42653432398) reran seed 2028 before and after another full small-neural training run and got **466.641 both times**, so a single intervening training call is not sufficient to explain the discrepancy. The cause of the cross-workflow difference remains **unresolved**; the shared-workflow JSON repeatability must not be overstated as universal order-independent reproducibility. All raw runs remain public.
+
+```bash
+python -m unittest discover -s tests -p "equal_frame_contract_test.py" -v
+python -m p3.equal_frame_comparison --frames 320000 --eval-episodes 64
+```
