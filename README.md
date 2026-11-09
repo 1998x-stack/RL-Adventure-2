@@ -73,3 +73,16 @@ The CI also precommits **seeds 2026, 2027, 2028**, each running 480 training epi
 ```bash
 python -m p3.benchmark --output build/p3-multiseed.json
 ```
+
+### P3 controlled linear-vs-neural comparison
+
+[`p3/torch_actor_critic.py`](p3/torch_actor_critic.py) adds an **actual PyTorch CPU neural actor/critic** with separate one-hidden-layer 32-unit policy and value networks. [`p3/compare_models.py`](p3/compare_models.py) compares it to the NumPy linear baseline using the **same CartPole-v1 reset seeds, 480 training episodes, validation checkpoint frequency, 64 held-out evaluation episodes and random baseline**, for predeclared seeds **2026, 2027, 2028**. Both algorithms use advantage-based Monte Carlo updates; architecture, optimizers and numerical precision differ, so this is a controlled learning benchmark rather than a direct framework-only or original notebook A2C comparison.
+
+```bash
+python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+python -m unittest discover -s tests -p "test_p3_neural.py" -v
+python -m p3.compare_models --output build/p3-model-comparison.json --timing-output build/p3-model-timing.json
+```
+
+The new CI checks nonzero actor **and** critic gradients, fixed-seed repeatability and full comparison JSON byte-for-byte stability. It **does not require the neural network to outperform** the linear baseline. Runtime is recorded separately because timing is not byte-reproducible and includes training, validation and evaluation, but excludes dependency installation. It is single-machine sequential timing, **not** a hardware-standardized benchmark. Neither implementation reproduces the original vectorized n-step PyTorch A2C notebook; that remains an open research task.
