@@ -154,3 +154,17 @@ python -m p3.compare_vector_backends --seed 2026 --updates 4000 --eval-episodes 
 ```
 
 **Remaining scope:** The original historical `common/multiprocessing_env.py` still uses old Gym's four-element `step` API; this is a **modern, compatible subprocess backend**, not a verbatim execution of that legacy source. Matching 320,000 frames across **different** algorithms (linear/neural/n-step) remains unverified; their existing results use different training budgets and must not be ranked as if frame budgets were equal.
+
+
+### P3 equal-environment-frame comparison across three algorithms
+
+The earlier Monte Carlo baselines trained for **480 completed episodes**, but the 16-way n-step A2C trained for **320,000 environmental transitions**. [`p3/equal_frame_comparison.py`](p3/equal_frame_comparison.py) now enforces **exactly 320,000 CartPole-v1 training steps per algorithm per seed** for NumPy linear, small PyTorch neural Monte Carlo and 16-env/5-step PyTorch n-step A2C, using seeds **2026, 2027, 2028**, the same 64 held-out evaluation seeds and random-action baseline, with the same 8,000-frame validation cadence target.
+
+The episodic algorithms finish their last partial episode at the precise budget boundary, marking this as an **artificial truncation** and assigning zero Monte Carlo returns beyond the cutoff. The n-step method continues to bootstrap from its rollouts. All three retain their original optimizers, model capacities and different training trajectories; the next episode boundary may slightly delay an episodic learner's checkpoint relative to exactly 8,000 frames. **Equal frame budgets remove one major confounder but do not make a causal or capacity-matched comparison.**
+
+```bash
+python -m unittest discover -s tests -p "equal_frame_contract_test.py" -v
+python -m p3.equal_frame_comparison --frames 320000 --eval-episodes 64
+```
+
+The CI runs the entire three-seed experiment **twice**, compares deterministic JSON byte-for-byte, and archives elapsed CPU wall times in a separate, non-deterministic file. The score must be reported irrespective of which algorithm wins.
