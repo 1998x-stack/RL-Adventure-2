@@ -139,3 +139,18 @@ Full-run CPU elapsed time per seed on one GitHub runner (training + validation +
 The earlier [short-budget smoke](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42640025148) used only **25,600 interactions per seed** and recorded an across-seed mean **41.287**. This was a successful code/contract smoke test, **not sufficient training**. The longer experiment also uses a less frequent validation schedule, so this is **not a one-variable study isolating training budget**.
 
 **Important:** this benchmark reproduces the Notebook's **n-step learning structure and vector batch size**, not its original 2018 subprocess implementation or its Python/Gym dependency stack. Training budgets differ from the 480-completed-episode NumPy and smaller PyTorch comparisons, so their reward means cannot be fairly ranked against this result without aligning environment transitions and other protocol details.
+
+### Verified real-process parity at an exactly matched frame budget
+
+[Successful CPU CI with raw JSON and runtime artifact](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42646793026) validates the modern Gymnasium 1.1.1 `AsyncVectorEnv` implementation with **real independent child processes** against the synchronous backend. Four contract tests checked different live worker PIDs, worker cleanup, SAME_STEP final observations on forced time-limit truncations, and a short actual training run with nonzero actor/critic weight changes.
+
+For predefined **seed 2026**, the same n-step A2C executed **16 workers × 5 steps × 4,000 updates = 320,000 genuine environment interactions** on both backends. The program compared all reported training/evaluation JSON fields **exactly** (excluding the backend identifier) and **passed**. Both backends produced **481.891 mean reward on the 64-episode held-out evaluation**. This supports semantic parity for this workload; it does not prove every Gymnasium environment or every OS behaves identically.
+
+On that single GitHub-hosted CPU run, sequential full-run timings were **59.755 s sync / 89.500 s async**, including training, checkpoint evaluation and held-out evaluation, excluding installation. The async backend was slower in this specific small-observation CartPole workload. These are separate, non-deterministic timing observations, not hardware-normalized speed benchmarks, and there is no general claim that subprocesses are slower.
+
+```bash
+python -m unittest discover -s tests -p "subprocess_a2c_contract_test.py" -v
+python -m p3.compare_vector_backends --seed 2026 --updates 4000 --eval-episodes 64
+```
+
+**Remaining scope:** The original historical `common/multiprocessing_env.py` still uses old Gym's four-element `step` API; this is a **modern, compatible subprocess backend**, not a verbatim execution of that legacy source. Matching 320,000 frames across **different** algorithms (linear/neural/n-step) remains unverified; their existing results use different training budgets and must not be ranked as if frame budgets were equal.
