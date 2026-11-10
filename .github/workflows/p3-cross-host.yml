@@ -1,0 +1,72 @@
+name: P3 independent-runner CPU reproducibility
+on:
+  push:
+    paths:
+      - "p3/runner_variance.py"
+      - "p3/compare_runner_reports.py"
+      - "tests/runner_report_contract_test.py"
+      - ".github/workflows/p3-cross-host.yml"
+  pull_request:
+    paths:
+      - "p3/runner_variance.py"
+      - "p3/compare_runner_reports.py"
+      - "tests/runner_report_contract_test.py"
+      - ".github/workflows/p3-cross-host.yml"
+permissions:
+  contents: read
+jobs:
+  replay:
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [one, two, three]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact CPU dependencies
+        run: |
+          python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+          python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+      - name: Train one isolated seed on this assigned runner
+        run: python -m p3.runner_variance --out build/result.json
+      - name: Archive raw model, CPU fingerprint and environment versions
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-independent-2028-${{ matrix.host }}
+          path: build/result.json
+  compare:
+    needs: replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install CPU dependencies for audit helper imports
+        run: |
+          python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+          python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+      - name: Validate cross-host difference detector
+        run: python -m unittest discover -s tests -p "runner_report_contract_test.py" -v
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: p3-independent-2028-*
+          path: build/hosts
+          merge-multiple: false
+      - name: Compare exact reports from three distinct Actions jobs
+        run: python -m p3.compare_runner_reports --folder build/hosts --output build/p3-cross-host-summary.json
+      - name: Preserve comparison even on non-reproducibility
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-cross-host-report
+          path: build/p3-cross-host-summary.json
+          if-no-files-found: ignore
