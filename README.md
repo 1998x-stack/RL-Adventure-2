@@ -192,3 +192,21 @@ On one sequential GitHub CPU run, mean elapsed times per seed including validati
 python -m unittest discover -s tests -p "equal_frame_contract_test.py" -v
 python -m p3.equal_frame_comparison --frames 320000 --eval-episodes 64
 ```
+
+
+### P3 follow-up: cross-workflow reproducibility, four independent probes
+
+The seed-2028 anomaly from the earlier full equal-frame benchmark is **not yet explained**. We kept the conflicting evidence: a historical joint run reported **482.297**, while an isolated run reported **466.641**. All four newer diagnostic workflows are public:
+
+| Scope of diagnostic | Result for n-step seed 2028 | Source |
+|---|---|---|
+| Same host: standalone vs joint API with only seed 2028 | 466.641 / 466.641; full result JSON identical | [CI / artifact](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42738486096) |
+| Same host: standalone before and after prior n-step seeds 2026 and 2027 | 466.641 / 466.641; full result JSON identical | [CI / artifact](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42739164734) |
+| Same host: standalone before and after the **full joint sequence** of all three algorithms × three seeds | 466.641 / 466.641, embedded joint 466.641; all result JSON identical | [CI / artifact](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42739564261) |
+| Three independent GitHub jobs / hosts | 466.641 / 466.641 / 466.641; full result JSON identical | [CI / artifact](https://github.com/1998x-stack/RL-Adventure-2/actions/runs/42739770887) |
+
+The first job reported an **AMD EPYC 7763**, the second and third reported **AMD EPYC 9V45**, and the cross-host jobs were each allocated **AMD EPYC 7763**. The three-host comparison thus verifies distinct Actions jobs, **not heterogenous CPU models**. We recorded CPU model, CPU instruction-flag hash, pinned library versions and runner image in separate diagnostic artifacts.
+
+These results **rule out a reliably reproducible same-host invocation-order difference in the tested conditions**, but do **not** prove a hardware-specific root cause or that every operating system / CPU architecture yields identical floats. The original conflicting CI data remains valid evidence of an unexplained cross-workflow difference. PyTorch itself [does not guarantee bitwise-identical floating-point results across platforms](https://docs.pytorch.org/docs/stable/notes/numerical_accuracy.html) and [deterministic algorithms are scoped to the same software/hardware](https://docs.pytorch.org/docs/stable/generated/torch.use_deterministic_algorithms.html).
+
+**Next reproducibility gate:** record hardware fingerprints on all future benchmark runs, then reproduce on materially different CPU capabilities before declaring a cross-hardware cause or universal reproducibility. This is an investigation of the exact same algorithm, not an improved reward/score claim.
