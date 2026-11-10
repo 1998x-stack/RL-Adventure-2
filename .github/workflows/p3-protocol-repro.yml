@@ -1,0 +1,43 @@
+name: P3 n-step standalone vs joint protocol reproducibility
+on:
+  push:
+    paths:
+      - "p3/protocol_repro.py"
+      - "tests/protocol_repro_contract_test.py"
+      - ".github/workflows/p3-protocol-repro.yml"
+  pull_request:
+    paths:
+      - "p3/protocol_repro.py"
+      - "tests/protocol_repro_contract_test.py"
+      - ".github/workflows/p3-protocol-repro.yml"
+permissions:
+  contents: read
+jobs:
+  same-runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned test environment
+        run: |
+          python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+          python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+      - name: Validate comparison auditor and host fingerprint
+        run: python -m unittest discover -s tests -p "protocol_repro_contract_test.py" -v
+      - name: Test identical n-step seed 2028 alone and through joint comparison
+        run: |
+          python -m p3.protocol_repro --frames 320000 --eval-episodes 64             --output build/p3-protocol-repro.json
+      - name: Publish full comparison regardless of equality
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-cross-protocol-same-host-repro
+          path: build/p3-protocol-repro.json
+          if-no-files-found: ignore
