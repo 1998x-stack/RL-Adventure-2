@@ -1,0 +1,43 @@
+name: P3 full joint sequence vs standalone A2C reproducibility
+on:
+  push:
+    paths:
+      - "p3/full_path_audit.py"
+      - "tests/full_path_contract_test.py"
+      - ".github/workflows/p3-full-order-audit.yml"
+  pull_request:
+    paths:
+      - "p3/full_path_audit.py"
+      - "tests/full_path_contract_test.py"
+      - ".github/workflows/p3-full-order-audit.yml"
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    env:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned CPU dependencies
+        run: |
+          python -m pip install "gymnasium==1.1.1" "numpy==1.26.4"
+          python -m pip install "torch==2.5.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+      - name: Small complete-call-order contract replay
+        run: python -m unittest discover -s tests -p "full_path_contract_test.py" -v
+      - name: Replay full three-seed algorithm order before and after standalone 2028
+        run: |
+          python -m p3.full_path_audit --frames 320000 --eval-episodes 64             --output build/p3-full-order-audit.json
+      - name: Preserve outcome, machine fingerprint and full difference fields
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-full-joint-sequence-order-audit
+          path: build/p3-full-order-audit.json
+          if-no-files-found: ignore
